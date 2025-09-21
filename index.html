@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Karaoke - One word</title>
+<style>
+  html,body{height:100%;margin:0;background:#000;font-family:Inter, "Helvetica Neue", Arial, sans-serif;color:#fff}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:18px}
+  .controls{display:flex;gap:10px;align-items:center}
+  button, input[type=file]{padding:10px 14px;border-radius:10px;border:none;background:#222;color:#fff;font-weight:600}
+  #player{display:none} /* ẩn thẻ media - chúng ta chỉ dùng audio/video để phát */
+  #word {
+    font-size: clamp(28px, 8vw, 64px);
+    line-height:1;
+    text-align:center;
+    color:#fff;
+    text-shadow: 0 0 18px rgba(255,255,255,0.15), 0 0 40px rgba(0, 200, 255, 0.08);
+    transform-origin:center center;
+    transition: transform 260ms cubic-bezier(.2,.9,.25,1), opacity 260ms;
+    opacity:0;
+  }
+  #word.show { opacity:1; transform: scale(1.06); filter: drop-shadow(0 6px 26px rgba(0,200,255,0.12)); }
+  #meta{font-size:13px;color:#aaa}
+  .small{font-size:13px;color:#bbb}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="controls">
+      <input id="fileInput" type="file" accept="audio/*,video/*">
+      <button id="btnPlay">Play / Pause</button>
+      <div id="meta" class="small">Chọn file MP4/MP3 từ iPhone (Files)</div>
+    </div>
+
+    <!-- player: có thể là video (mp4) hoặc audio (mp3). -->
+    <video id="player" playsinline webkit-playsinline crossorigin="anonymous"></video>
+
+    <!-- chữ hiện giữa màn hình -->
+    <div id="word">Nhấn "Chọn file" để bắt đầu</div>
+    <div class="small">Một chữ một lần — tự động sync theo thời lượng bài</div>
+  </div>
+
+<script>
+  // === Lời bài hát (bạn có thể chỉnh lại) ===
+  const lyricsText = `Có phải vì anh
+Vẫn thường vô ý
+Chẳng suy nghĩ, vài lần khiến em u sầu
+Có phải vì anh
+Trót vài câu nói
+Chạm vào nơi niềm đau mà người luôn chôn giấu
+Vài câu nói có khiến người thay đổi?
+Có khiến bờ môi ấm êm?
+Nay chỉ còn trong nỗi nhớ`;
+
+  // tách thành từng "chữ" (ở đây split theo whitespace -> từng từ)
+  const words = lyricsText.split(/\s+/).filter(Boolean);
+  const fileInput = document.getElementById('fileInput');
+  const player = document.getElementById('player');
+  const btnPlay = document.getElementById('btnPlay');
+  const wordEl = document.getElementById('word');
+
+  let lastIndex = -1;
+
+  // khi user chọn file từ iPhone
+  fileInput.addEventListener('change', (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    // tạo URL tạm thời cho file local -> chạy trực tiếp (khỏi upload)
+    const url = URL.createObjectURL(f);
+    player.src = url;
+    player.load();
+    player.play().catch(()=> {
+      // trên iOS nếu auto-play bị chặn, chờ user bấm Play
+    });
+    wordEl.textContent = 'Đang tải...';
+  });
+
+  // play/pause
+  btnPlay.addEventListener('click', ()=>{
+    if(player.paused) {
+      player.play().catch(()=>{ /* autoplay blocked */ });
+    } else player.pause();
+  });
+
+  // khi biết duration, reset state
+  player.addEventListener('loadedmetadata', ()=>{
+    lastIndex = -1;
+    // show first placeholder
+    wordEl.textContent = '';
+    wordEl.classList.remove('show');
+  });
+
+  // cập nhật chữ theo thời gian: dùng timeupdate để luôn sync
+  player.addEventListener('timeupdate', ()=>{
+    const dur = player.duration;
+    if(!dur || !isFinite(dur)) return;
+    const t = player.currentTime;
+    // tính chỉ số từ 0..words.length-1
+    const idx = Math.min(words.length-1, Math.floor((t/dur) * words.length));
+    if(idx !== lastIndex){
+      lastIndex = idx;
+      showWord(words[idx] || '');
+    }
+  });
+
+  // khi seek hoặc replay, đặt lại
+  player.addEventListener('seeked', ()=>{
+    lastIndex = -1;
+    // ngay lập tức cập nhật
+    const dur = player.duration;
+    if(dur && isFinite(dur)){
+      const t = player.currentTime;
+      const idx = Math.min(words.length-1, Math.floor((t/dur) * words.length));
+      lastIndex = idx;
+      showWord(words[idx] || '');
+    }
+  });
+
+  function showWord(w){
+    // animate: remove class rồi add để retrigger animation
+    wordEl.classList.remove('show');
+    // tiny delay để force reflow then show
+    setTimeout(()=>{
+      wordEl.textContent = w;
+      wordEl.classList.add('show');
+    }, 40);
+  }
+
+  // nếu muốn, bạn có thể bật debug ở đây:
+  // player.addEventListener('error', (e)=> console.log('media error', e));
+</script>
+</body>
+</html>
